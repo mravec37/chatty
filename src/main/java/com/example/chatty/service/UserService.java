@@ -15,13 +15,14 @@ public class UserService {
     private final Map<String, User> usersById = new ConcurrentHashMap<>();
     private final Map<String, String> userIdByUsername = new ConcurrentHashMap<>();
 
+    private final Map<String, String> userIdBySessionId = new ConcurrentHashMap<>();
     public synchronized JoinResponse join(String username) {
         if (username == null || username.isBlank()) {
             return new JoinResponse(false, null, null, "Username is required");
         }
 
         if (userIdByUsername.containsKey(username)) {
-            return new JoinResponse(false, null, null, "Username already taken");
+            return new JoinResponse(false, null, null, "Username is already taken");
         }
 
         String userId = UUID.randomUUID().toString();
@@ -39,6 +40,26 @@ public class UserService {
             userIdByUsername.remove(user.getUsername());
         }
     }
+
+    public void bindSession(String sessionId, String userId) {
+        userIdBySessionId.put(sessionId, userId);
+    }
+
+    public String removeBySessionId(String sessionId) {
+        String userId = userIdBySessionId.remove(sessionId);
+
+        if (userId == null) {
+            return null;
+        }
+
+        User removed = usersById.remove(userId);
+        if (removed != null) {
+            userIdByUsername.remove(removed.getUsername());
+        }
+
+        return userId;
+    }
+
 
     public boolean existsById(String userId) {
         return usersById.containsKey(userId);

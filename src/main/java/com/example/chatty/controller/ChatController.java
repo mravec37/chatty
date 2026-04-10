@@ -2,9 +2,11 @@ package com.example.chatty.controller;
 
 import com.example.chatty.ChatMessage;
 import com.example.chatty.dto.ChatMessageDto;
+import com.example.chatty.dto.ConnectRequest;
 import com.example.chatty.service.ConversationService;
 import com.example.chatty.service.UserService;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
@@ -26,14 +28,31 @@ public class ChatController {
     }
 
     @MessageMapping("/connect")
-    public void connect(String userId) {
-        System.out.println(userId);
+    public void connect(ConnectRequest request, SimpMessageHeaderAccessor headerAccessor) {
+        String userId = request.getUserId();
+        String sessionId = headerAccessor.getSessionId();
 
+        System.out.println("userId: " + userId);
+        System.out.println("Websocket session id: " + sessionId);
+
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+
+        if (!userService.existsById(userId)) {
+            return;
+        }
+
+        userService.bindSession(sessionId, userId);
         messagingTemplate.convertAndSend("/topic/users", userService.getAllUsers());
     }
     @MessageMapping("/chat")
     public void chat(ChatMessage message) {
-        if (!validMessage(message)) return;
+        if (!isValidMessage(message)) return;
 
         message.setSentAt(LocalDateTime.now());
 
@@ -45,7 +64,7 @@ public class ChatController {
         messagingTemplate.convertAndSend("/topic/messages/" + message.getFromUserId(), dto);
     }
 
-    private boolean validMessage(ChatMessage message) {
+    private boolean isValidMessage(ChatMessage message) {
         if (message == null) {
             return false;
         }
