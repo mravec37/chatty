@@ -11,7 +11,7 @@
         }
 
         .container {
-            max-width: 400px;
+            max-width: 500px;
             margin: 0 auto;
             text-align: center;
         }
@@ -39,24 +39,48 @@
             margin-top: 30px;
             text-align: left;
         }
+
+        #status {
+            margin-top: 12px;
+            font-size: 14px;
+        }
+
+        #usersList {
+            margin-top: 15px;
+            padding-left: 20px;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>Chatty</h1>
-    <p>Enter your name to join the chat</p>
 
-    <input type="text" id="username" placeholder="Your name" />
-    <button onclick="joinChat()">Join</button>
+    <div id="joinArea">
+        <p>Enter your name to join the chat</p>
+        <input type="text" id="username" placeholder="Your name" />
+        <button onclick="joinChat()">Join</button>
+    </div>
+
+    <div id="status"></div>
 
     <div id="chatArea" class="hidden">
         <h2>Welcome, <span id="displayName"></span>!</h2>
         <p>You are now connected.</p>
+
+        <h3>Connected users</h3>
+        <ul id="usersList"></ul>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+
 <script>
-    function joinChat() {
+    let stompClient = null;
+    let currentUsername = null;
+    let currentUserId = null;
+
+    async function joinChat() {
         const usernameInput = document.getElementById("username");
         const username = usernameInput.value.trim();
 
@@ -65,13 +89,78 @@
             return;
         }
 
-        document.getElementById("displayName").textContent = username;
-        document.getElementById("chatArea").classList.remove("hidden");
+        document.getElementById("status").textContent = "Joining...";
 
-        console.log("User joined:", username);
+        try {
+            const response = await fetch('/api/join', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: username
+                })
+            });
 
-        // Later you can connect WebSocket here
-        // connectWebSocket(username);
+            const data = await response.json();
+
+            if (!data.success) {
+                document.getElementById("status").textContent = data.error || "Join failed.";
+                alert(data.error || "Join failed.");
+                return;
+            }
+
+            currentUsername = data.username;
+            currentUserId = data.userId;
+
+            connectWebSocket();
+
+        } catch (error) {
+            document.getElementById("status").textContent = "Join request failed.";
+            console.error("Join API error:", error);
+        }
+    }
+
+    function connectWebSocket() {
+        const socket = new SockJS('/ws');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function () {
+            document.getElementById("status").textContent = "Connected to server.";
+
+            stompClient.subscribe('/topic/users', function (message) {
+                console.log("get all users");
+                const users = JSON.parse(message.body);
+                renderUsers(users);
+            });
+
+            stompClient.subscribe('/topic/messages/' + currentUserId, function (message) {
+                const body = JSON.parse(message.body);
+                console.log("Private message received:", body);
+            });
+
+            stompClient.send("/app/connect", {}, JSON.stringify({
+                userId: currentUserId
+            }));
+
+            document.getElementById("displayName").textContent = currentUsername;
+            document.getElementById("joinArea").classList.add("hidden");
+            document.getElementById("chatArea").classList.remove("hidden");
+        }, function (error) {
+            document.getElementById("status").textContent = "WebSocket connection failed.";
+            console.error("WebSocket connection error:", error);
+        });
+    }
+
+    function renderUsers(users) {
+        const usersList = document.getElementById("usersList");
+        usersList.innerHTML = "";
+
+        users.forEach(user => {
+            const li = document.createElement("li");
+            li.textContent = user.username;
+            usersList.appendChild(li);
+        });
     }
 </script>
 </body>
