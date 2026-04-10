@@ -11,9 +11,8 @@
         }
 
         .container {
-            max-width: 500px;
+            max-width: 700px;
             margin: 0 auto;
-            text-align: center;
         }
 
         input {
@@ -35,19 +34,63 @@
             display: none;
         }
 
-        #chatArea {
-            margin-top: 30px;
-            text-align: left;
-        }
-
         #status {
             margin-top: 12px;
             font-size: 14px;
         }
 
+        #chatLayout {
+            display: flex;
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        #usersPanel {
+            width: 220px;
+        }
+
+        #conversationPanel {
+            flex: 1;
+        }
+
         #usersList {
-            margin-top: 15px;
-            padding-left: 20px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #usersList li {
+            padding: 10px;
+            border: 1px solid #ccc;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        #usersList li:hover {
+            background-color: #f5f5f5;
+        }
+
+        #usersList li.selected {
+            background-color: #e6f0ff;
+            font-weight: bold;
+        }
+
+      #messages {
+         border: 1px solid #ccc;
+         height: 300px;
+         padding: 12px;
+         margin-bottom: 12px;
+         overflow-y: auto;
+         box-sizing: border-box;
+      }
+
+        .message {
+            margin-bottom: 10px;
+        }
+
+        .message-meta {
+            font-size: 12px;
+            color: #666;
         }
     </style>
 </head>
@@ -65,10 +108,21 @@
 
     <div id="chatArea" class="hidden">
         <h2>Welcome, <span id="displayName"></span>!</h2>
-        <p>You are now connected.</p>
 
-        <h3>Connected users</h3>
-        <ul id="usersList"></ul>
+        <div id="chatLayout">
+            <div id="usersPanel">
+                <h3>Connected users</h3>
+                <ul id="usersList"></ul>
+            </div>
+
+            <div id="conversationPanel">
+                <h3 id="conversationTitle">Select a user</h3>
+                <div id="messages"></div>
+
+                <input type="text" id="messageInput" placeholder="Type a message" />
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -79,6 +133,8 @@
     let stompClient = null;
     let currentUsername = null;
     let currentUserId = null;
+    let selectedUser = null;
+    let connectedUsers = [];
 
     async function joinChat() {
         const usernameInput = document.getElementById("username");
@@ -129,14 +185,14 @@
             document.getElementById("status").textContent = "Connected to server.";
 
             stompClient.subscribe('/topic/users', function (message) {
-                console.log("get all users");
                 const users = JSON.parse(message.body);
+                connectedUsers = users;
                 renderUsers(users);
             });
 
             stompClient.subscribe('/topic/messages/' + currentUserId, function (message) {
                 const body = JSON.parse(message.body);
-                console.log("Private message received:", body);
+                handleIncomingMessage(body);
             });
 
             stompClient.send("/app/connect", {}, JSON.stringify({
@@ -157,10 +213,111 @@
         usersList.innerHTML = "";
 
         users.forEach(user => {
+            if (user.userId === currentUserId) {
+                return;
+            }
+
             const li = document.createElement("li");
             li.textContent = user.username;
+
+            if (selectedUser && selectedUser.userId === user.userId) {
+                li.classList.add("selected");
+            }
+
+            li.addEventListener("click", function () {
+                selectUser(user);
+            });
+
             usersList.appendChild(li);
         });
+    }
+
+    async function selectUser(user) {
+        selectedUser = user;
+        renderUsers(connectedUsers);
+
+        document.getElementById("conversationTitle").textContent =
+            "Conversation with " + user.username;
+
+        await loadConversation(user.userId);
+    }
+
+    async function loadConversation(targetUserId) {
+        try {
+            const response = await fetch(
+                `/api/conversations?userId=${encodeURIComponent(currentUserId)}&targetUserId=${encodeURIComponent(targetUserId)}`
+            );
+
+            const messages = await response.json();
+            renderConversation(messages);
+        } catch (error) {
+            console.error("Failed to load conversation:", error);
+            document.getElementById("status").textContent = "Failed to load conversation.";
+        }
+    }
+
+    function renderConversation(messages) {
+        const messagesDiv = document.getElementById("messages");
+        messagesDiv.innerHTML = "";
+
+        messages.forEach(message => {
+            appendMessage(message);
+        });
+    }
+
+   function appendMessage(message) {
+    const messagesDiv = document.getElementById("messages");
+
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("message");
+
+    const isMine = message.fromUserId === currentUserId;
+    const senderName = isMine ? "You" : (selectedUser ? selectedUser.username : "Unknown");
+    const content = message.content || "";
+    const sentAt = message.sentAt || "";
+
+    wrapper.innerHTML = `
+        <div><strong>${senderName}</strong>: ${content}</div>
+        <div class="message-meta">${sentAt}</div>
+    `;
+
+    messagesDiv.appendChild(wrapper);
+}
+
+    function handleIncomingMessage(message) {
+        if (!selectedUser) {
+            return;
+        }
+
+        const isRelevant =
+            (message.fromUserId === currentUserId && message.toUserId === selectedUser.userId) ||
+            (message.fromUserId === selectedUser.userId && message.toUserId === currentUserId);
+
+        if (isRelevant) {
+            appendMessage(message);
+        }
+    }
+
+    function sendMessage() {
+        const input = document.getElementById("messageInput");
+        const content = input.value.trim();
+
+        if (!selectedUser) {
+            alert("Select a user first.");
+            return;
+        }
+
+        if (content === "") {
+            return;
+        }
+
+        stompClient.send("/app/chat", {}, JSON.stringify({
+            fromUserId: currentUserId,
+            toUserId: selectedUser.userId,
+            content: content
+        }));
+
+        input.value = "";
     }
 </script>
 </body>

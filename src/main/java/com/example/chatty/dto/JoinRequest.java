@@ -13,3 +13,4 @@ public class JoinRequest {
 
     private String username;
 }
+
