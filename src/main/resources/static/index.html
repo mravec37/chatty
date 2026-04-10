@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatty</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 12px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 10px 16px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #chatArea {
+            margin-top: 30px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Chatty</h1>
+    <p>Enter your name to join the chat</p>
+
+    <input type="text" id="username" placeholder="Your name" />
+    <button onclick="joinChat()">Join</button>
+
+    <div id="chatArea" class="hidden">
+        <h2>Welcome, <span id="displayName"></span>!</h2>
+        <p>You are now connected.</p>
+    </div>
+</div>
+
+<script>
+    function joinChat() {
+        const usernameInput = document.getElementById("username");
+        const username = usernameInput.value.trim();
+
+        if (username === "") {
+            alert("Please enter your name.");
+            return;
+        }
+
+        document.getElementById("displayName").textContent = username;
+        document.getElementById("chatArea").classList.remove("hidden");
+
+        console.log("User joined:", username);
+
+        // Later you can connect WebSocket here
+        // connectWebSocket(username);
+    }
+</script>
+</body>
+</html>
