@@ -20,8 +20,4 @@ public class JoinResponse {
         this.error = error;
     }
 
-    public boolean isSuccess() {
-        return success;
-    }
-
 }

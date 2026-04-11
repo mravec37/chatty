@@ -1,20 +1,21 @@
 package com.example.chatty.service;
 
-
 import com.example.chatty.User;
 import com.example.chatty.dto.JoinResponse;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class UserService {
 
-    private final Map<UUID, User> usersById = new ConcurrentHashMap<>();
-    private final Map<String, UUID> userIdByUsername = new ConcurrentHashMap<>();
-    private final Map<String, UUID> userIdBySessionId = new ConcurrentHashMap<>();
+    private final Map<UUID, User> usersById = new HashMap<>();
+    private final Map<String, UUID> userIdByUsername = new HashMap<>();
+    private final Map<String, UUID> userIdBySessionId = new HashMap<>();
 
     public synchronized JoinResponse join(String username) {
         if (username == null || username.isBlank()) {
@@ -34,19 +35,12 @@ public class UserService {
         return new JoinResponse(true, userId.toString(), username, null);
     }
 
-    public void removeById(UUID userId) {
-        User user = usersById.remove(userId);
-        if (user != null) {
-            userIdByUsername.remove(user.getUsername());
-        }
-    }
-
-    public void bindSession(String sessionId, String userIdString) {
+    public synchronized void bindSession(String sessionId, String userIdString) {
         UUID userId = UUID.fromString(userIdString);
         userIdBySessionId.put(sessionId, userId);
     }
 
-    public UUID removeBySessionId(String sessionId) {
+    public synchronized UUID removeBySessionId(String sessionId) {
         UUID userId = userIdBySessionId.remove(sessionId);
 
         if (userId == null) {
@@ -61,7 +55,7 @@ public class UserService {
         return userId;
     }
 
-    public boolean existsById(String userIdString) {
+    public synchronized boolean existsById(String userIdString) {
         try {
             UUID userId = UUID.fromString(userIdString);
             return usersById.containsKey(userId);
@@ -70,16 +64,7 @@ public class UserService {
         }
     }
 
-    public User getById(String userIdString) {
-        try {
-            UUID userId = UUID.fromString(userIdString);
-            return usersById.get(userId);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    public List<User> getAllUsers() {
+    public synchronized List<User> getAllUsers() {
         return new ArrayList<>(usersById.values());
     }
 }

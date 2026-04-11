@@ -52,7 +52,10 @@ public class ChatController {
     }
     @MessageMapping("/chat")
     public void chat(ChatMessage message) {
-        if (!isValidMessage(message)) return;
+        if (!isValidMessage(message)) {
+            System.out.println("Not a valid message");
+            return;
+        }
 
         message.setSentAt(LocalDateTime.now());
 
