@@ -1,4 +1,4 @@
-package com.example.chatty;
+package com.example.chatty.model;
 
 import java.util.Objects;
 import java.util.UUID;

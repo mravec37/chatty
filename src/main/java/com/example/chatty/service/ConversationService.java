@@ -1,8 +1,8 @@
 package com.example.chatty.service;
 
-import com.example.chatty.ChatMessage;
-import com.example.chatty.Conversation;
-import com.example.chatty.ConversationKey;
+import com.example.chatty.model.ChatMessage;
+import com.example.chatty.model.Conversation;
+import com.example.chatty.model.ConversationKey;
 import com.example.chatty.dto.ChatMessageDto;
 import org.springframework.stereotype.Service;
 

@@ -1,6 +1,6 @@
 package com.example.chatty.service;
 
-import com.example.chatty.User;
+import com.example.chatty.model.User;
 import com.example.chatty.dto.JoinResponse;
 import org.springframework.stereotype.Service;
 

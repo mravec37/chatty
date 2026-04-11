@@ -1,4 +1,4 @@
-package com.example.chatty;
+package com.example.chatty.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
