@@ -1,5 +1,7 @@
 package com.example.chatty.service;
 
+
+
 import com.example.chatty.ChatMessage;
 import com.example.chatty.Conversation;
 import com.example.chatty.ConversationKey;
@@ -7,16 +9,20 @@ import com.example.chatty.dto.ChatMessageDto;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ConversationService {
 
-    private static final DateTimeFormatter MESSAGE_TIME_FORMAT =  DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private ConcurrentHashMap<ConversationKey, Conversation> conversations = new ConcurrentHashMap<>();
+    private static final DateTimeFormatter MESSAGE_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private final ConcurrentHashMap<ConversationKey, Conversation> conversations = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Set<UUID>> conversationPartners = new ConcurrentHashMap<>();
 
     public static ChatMessageDto toDto(ChatMessage message) {
         String formattedSentAt = "";
@@ -42,10 +48,38 @@ public class ConversationService {
             return List.of();
         }
 
-        return conversation.getMessages()
-                .stream()
-                .map(ConversationService::toDto)
-                .toList();
+        List<ChatMessageDto> result = new ArrayList<>();
+        for (ChatMessage message : conversation.getMessages()) {
+            result.add(toDto(message));
+        }
+
+        return result;
+    }
+
+    private void registerConversationPartners(UUID firstUserId, UUID secondUserId) {
+        Set<UUID> firstUserPartners = conversationPartners.get(firstUserId);
+        if (firstUserPartners == null) {
+            firstUserPartners = ConcurrentHashMap.newKeySet();
+            conversationPartners.put(firstUserId, firstUserPartners);
+        }
+        firstUserPartners.add(secondUserId);
+
+        Set<UUID> secondUserPartners = conversationPartners.get(secondUserId);
+        if (secondUserPartners == null) {
+            secondUserPartners = ConcurrentHashMap.newKeySet();
+            conversationPartners.put(secondUserId, secondUserPartners);
+        }
+        secondUserPartners.add(firstUserId);
+    }
+
+    public Set<UUID> getConversationPartners(UUID userId) {
+        Set<UUID> partners = conversationPartners.get(userId);
+
+        if (partners == null) {
+            return Set.of();
+        }
+
+        return partners;
     }
 
     public void addMessage(ChatMessage message) {
@@ -62,5 +96,13 @@ public class ConversationService {
         }
 
         conversation.getMessages().add(message);
+        registerConversationPartners(fromUserId, toUserId);
+    }
+
+    public boolean conversationExists(String userId, String targetUserId) {
+        UUID firstId = UUID.fromString(userId);
+        UUID secondId = UUID.fromString(targetUserId);
+
+        return conversations.containsKey(new ConversationKey(firstId, secondId));
     }
 }

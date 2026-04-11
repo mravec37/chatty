@@ -11,7 +11,7 @@
         }
 
         .container {
-            max-width: 700px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -43,46 +43,77 @@
             display: flex;
             gap: 24px;
             margin-top: 24px;
+            align-items: flex-start;
         }
 
         #usersPanel {
-            width: 220px;
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .panel-box {
+            border: 1px solid #ccc;
+            padding: 12px;
+            box-sizing: border-box;
+            background-color: #fafafa;
+        }
+
+        .panel-box h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .scroll-panel {
+            max-height: 220px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            background-color: white;
+        }
+
+        .user-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .user-list li {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .user-list li:last-child {
+            border-bottom: none;
+        }
+
+        .user-list li:hover {
+            background-color: #f5f5f5;
+        }
+
+        .user-list li.selected {
+            background-color: #e6f0ff;
+            font-weight: bold;
+        }
+
+        .user-list li.archived {
+            color: #666;
+            background-color: #fcfcfc;
         }
 
         #conversationPanel {
             flex: 1;
         }
 
-        #usersList {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        #usersList li {
-            padding: 10px;
+        #messages {
             border: 1px solid #ccc;
-            margin-bottom: 8px;
-            cursor: pointer;
+            height: 300px;
+            padding: 12px;
+            margin-bottom: 12px;
+            overflow-y: auto;
+            box-sizing: border-box;
         }
-
-        #usersList li:hover {
-            background-color: #f5f5f5;
-        }
-
-        #usersList li.selected {
-            background-color: #e6f0ff;
-            font-weight: bold;
-        }
-
-      #messages {
-         border: 1px solid #ccc;
-         height: 300px;
-         padding: 12px;
-         margin-bottom: 12px;
-         overflow-y: auto;
-         box-sizing: border-box;
-      }
 
         .message {
             margin-bottom: 10px;
@@ -91,6 +122,12 @@
         .message-meta {
             font-size: 12px;
             color: #666;
+        }
+
+        .offline-note {
+            color: #a33;
+            font-size: 13px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -111,16 +148,30 @@
 
         <div id="chatLayout">
             <div id="usersPanel">
-                <h3>Connected users</h3>
-                <ul id="usersList"></ul>
+                <div class="panel-box">
+                    <h3>Connected users</h3>
+                    <div class="scroll-panel">
+                        <ul id="usersList" class="user-list"></ul>
+                    </div>
+                </div>
+
+                <div class="panel-box">
+                    <h3>Archived conversations</h3>
+                    <div class="scroll-panel">
+                        <ul id="archivedUsersList" class="user-list"></ul>
+                    </div>
+                </div>
             </div>
 
             <div id="conversationPanel">
                 <h3 id="conversationTitle">Select a user</h3>
+                <div id="offlineNote" class="offline-note hidden">
+                    This user is disconnected. You can view the conversation, but you cannot send new messages.
+                </div>
                 <div id="messages"></div>
 
                 <input type="text" id="messageInput" placeholder="Type a message" />
-                <button onclick="sendMessage()">Send</button>
+                <button id="sendButton" onclick="sendMessage()">Send</button>
             </div>
         </div>
     </div>
@@ -135,6 +186,7 @@
     let currentUserId = null;
     let selectedUser = null;
     let connectedUsers = [];
+    let archivedUsers = [];
 
     async function joinChat() {
         const usernameInput = document.getElementById("username");
@@ -187,12 +239,22 @@
             stompClient.subscribe('/topic/users', function (message) {
                 const users = JSON.parse(message.body);
                 connectedUsers = users;
-                renderUsers(users);
+
+                removeArchivedUsersThatAreOnline();
+                renderUsers();
+                renderArchivedUsers();
+                updateConversationInputState();
             });
 
             stompClient.subscribe('/topic/messages/' + currentUserId, function (message) {
                 const body = JSON.parse(message.body);
                 handleIncomingMessage(body);
+            });
+
+            stompClient.subscribe('/topic/users/archived/' + currentUserId, function (message) {
+                const archivedUserId = message.body;
+                console.log("User to archive:", archivedUserId);
+                archiveUserById(archivedUserId);
             });
 
             stompClient.send("/app/connect", {}, JSON.stringify({
@@ -208,11 +270,11 @@
         });
     }
 
-    function renderUsers(users) {
+    function renderUsers() {
         const usersList = document.getElementById("usersList");
         usersList.innerHTML = "";
 
-        users.forEach(user => {
+        connectedUsers.forEach(user => {
             if (user.userId === currentUserId) {
                 return;
             }
@@ -225,16 +287,44 @@
             }
 
             li.addEventListener("click", function () {
-                selectUser(user);
+                selectUser(user, false);
             });
 
             usersList.appendChild(li);
         });
     }
 
-    async function selectUser(user) {
-        selectedUser = user;
-        renderUsers(connectedUsers);
+    function renderArchivedUsers() {
+        const archivedUsersList = document.getElementById("archivedUsersList");
+        archivedUsersList.innerHTML = "";
+
+        archivedUsers.forEach(user => {
+            const li = document.createElement("li");
+            li.textContent = user.username;
+            li.classList.add("archived");
+
+            if (selectedUser && selectedUser.userId === user.userId) {
+                li.classList.add("selected");
+            }
+
+            li.addEventListener("click", function () {
+                selectUser(user, true);
+            });
+
+            archivedUsersList.appendChild(li);
+        });
+    }
+
+    async function selectUser(user, archived) {
+        selectedUser = {
+            userId: user.userId,
+            username: user.username,
+            archived: archived
+        };
+
+        renderUsers();
+        renderArchivedUsers();
+        updateConversationInputState();
 
         document.getElementById("conversationTitle").textContent =
             "Conversation with " + user.username;
@@ -263,26 +353,29 @@
         messages.forEach(message => {
             appendMessage(message);
         });
+
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
-   function appendMessage(message) {
-    const messagesDiv = document.getElementById("messages");
+    function appendMessage(message) {
+        const messagesDiv = document.getElementById("messages");
 
-    const wrapper = document.createElement("div");
-    wrapper.classList.add("message");
+        const wrapper = document.createElement("div");
+        wrapper.classList.add("message");
 
-    const isMine = message.fromUserId === currentUserId;
-    const senderName = isMine ? "You" : (selectedUser ? selectedUser.username : "Unknown");
-    const content = message.content || "";
-    const sentAt = message.sentAt || "";
+        const isMine = message.fromUserId === currentUserId;
+        const senderName = isMine ? "You" : (selectedUser ? selectedUser.username : "Unknown");
+        const content = message.content || "";
+        const sentAt = message.sentAt || "";
 
-    wrapper.innerHTML = `
-        <div><strong>${senderName}</strong>: ${content}</div>
-        <div class="message-meta">${sentAt}</div>
-    `;
+        wrapper.innerHTML = `
+            <div><strong>${senderName}</strong>: ${content}</div>
+            <div class="message-meta">${sentAt}</div>
+        `;
 
-    messagesDiv.appendChild(wrapper);
-}
+        messagesDiv.appendChild(wrapper);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
 
     function handleIncomingMessage(message) {
         if (!selectedUser) {
@@ -307,6 +400,11 @@
             return;
         }
 
+        if (selectedUser.archived) {
+            alert("This user is offline.");
+            return;
+        }
+
         if (content === "") {
             return;
         }
@@ -318,6 +416,66 @@
         }));
 
         input.value = "";
+    }
+
+    function archiveUserById(archivedUserId) {
+
+        console.log("Archived user ID received:", archivedUserId);
+        console.log("Connected users IDs:");
+        connectedUsers.forEach(u => {
+        console.log("userId:", u.userId);
+        });
+
+        const user = connectedUsers.find(u => u.userId === archivedUserId);
+
+        if (!user) {
+            console.log("No matching user");
+            return;
+        }
+
+        connectedUsers = connectedUsers.filter(u => u.userId !== archivedUserId);
+
+        const alreadyArchived = archivedUsers.some(u => u.userId === archivedUserId);
+        if (!alreadyArchived) {
+            archivedUsers.push(user);
+        }
+
+        if (selectedUser && selectedUser.userId === archivedUserId) {
+            selectedUser.archived = true;
+        }
+
+        renderUsers();
+        renderArchivedUsers();
+        updateConversationInputState();
+    }
+
+    function removeArchivedUsersThatAreOnline() {
+        archivedUsers = archivedUsers.filter(archivedUser =>
+            !connectedUsers.some(connectedUser => connectedUser.userId === archivedUser.userId)
+        );
+
+        if (selectedUser) {
+            const selectedOnlineUser = connectedUsers.find(u => u.userId === selectedUser.userId);
+            if (selectedOnlineUser) {
+                selectedUser.archived = false;
+            }
+        }
+    }
+
+    function updateConversationInputState() {
+        const offlineNote = document.getElementById("offlineNote");
+        const messageInput = document.getElementById("messageInput");
+        const sendButton = document.getElementById("sendButton");
+
+        if (selectedUser && selectedUser.archived) {
+            offlineNote.classList.remove("hidden");
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+        } else {
+            offlineNote.classList.add("hidden");
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+        }
     }
 </script>
 </body>

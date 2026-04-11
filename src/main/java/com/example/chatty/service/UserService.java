@@ -12,10 +12,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class UserService {
 
-    private final Map<String, User> usersById = new ConcurrentHashMap<>();
-    private final Map<String, String> userIdByUsername = new ConcurrentHashMap<>();
+    private final Map<UUID, User> usersById = new ConcurrentHashMap<>();
+    private final Map<String, UUID> userIdByUsername = new ConcurrentHashMap<>();
+    private final Map<String, UUID> userIdBySessionId = new ConcurrentHashMap<>();
 
-    private final Map<String, String> userIdBySessionId = new ConcurrentHashMap<>();
     public synchronized JoinResponse join(String username) {
         if (username == null || username.isBlank()) {
             return new JoinResponse(false, null, null, "Username is required");
@@ -25,28 +25,29 @@ public class UserService {
             return new JoinResponse(false, null, null, "Username is already taken");
         }
 
-        String userId = UUID.randomUUID().toString();
+        UUID userId = UUID.randomUUID();
         User user = new User(userId, username);
 
         usersById.put(userId, user);
         userIdByUsername.put(username, userId);
 
-        return new JoinResponse(true, userId, username, null);
+        return new JoinResponse(true, userId.toString(), username, null);
     }
 
-    public void removeById(String userId) {
+    public void removeById(UUID userId) {
         User user = usersById.remove(userId);
         if (user != null) {
             userIdByUsername.remove(user.getUsername());
         }
     }
 
-    public void bindSession(String sessionId, String userId) {
+    public void bindSession(String sessionId, String userIdString) {
+        UUID userId = UUID.fromString(userIdString);
         userIdBySessionId.put(sessionId, userId);
     }
 
-    public String removeBySessionId(String sessionId) {
-        String userId = userIdBySessionId.remove(sessionId);
+    public UUID removeBySessionId(String sessionId) {
+        UUID userId = userIdBySessionId.remove(sessionId);
 
         if (userId == null) {
             return null;
@@ -60,13 +61,22 @@ public class UserService {
         return userId;
     }
 
-
-    public boolean existsById(String userId) {
-        return usersById.containsKey(userId);
+    public boolean existsById(String userIdString) {
+        try {
+            UUID userId = UUID.fromString(userIdString);
+            return usersById.containsKey(userId);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
-    public User getById(String userId) {
-        return usersById.get(userId);
+    public User getById(String userIdString) {
+        try {
+            UUID userId = UUID.fromString(userIdString);
+            return usersById.get(userId);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public List<User> getAllUsers() {
